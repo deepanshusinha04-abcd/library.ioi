@@ -1,0 +1,67 @@
+# ==============================================================================
+# Library.io — Render Deployment Blueprint
+# Intelligent Library Management and Book Recommendation System
+# ==============================================================================
+# This blueprint provisions:
+# 1. Managed PostgreSQL Database (libraryio-postgres)
+# 2. Django REST API Web Service (libraryio-backend)
+# 3. React + Vite Frontend Static Site (libraryio-frontend)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Backend Web Service (Django DRF + Gunicorn + WhiteNoise)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: libraryio-backend
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn library_core.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --timeout 120"
+    healthCheckPath: /api/health/
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: libraryio-postgres
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        value: "localhost,127.0.0.1,.onrender.com"
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: "False"
+      - key: JWT_ACCESS_TOKEN_LIFETIME_MINUTES
+        value: "60"
+      - key: JWT_REFRESH_TOKEN_LIFETIME_DAYS
+        value: "7"
+
+  # ----------------------------------------------------------------------------
+  # 2. Frontend Static Site (React + Vite + PDF Reader)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: libraryio-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: "./dist"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: "https://libraryio-backend.onrender.com/api"
+
+# ------------------------------------------------------------------------------
+# 3. PostgreSQL Managed Database
+# ------------------------------------------------------------------------------
+databases:
+  - name: libraryio-postgres
+    plan: free
+    region: oregon
+    databaseName: library_db
+    user: library_user

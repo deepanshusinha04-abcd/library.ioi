@@ -1,0 +1,37 @@
+version: '3.8'
+
+# =================================================================
+# Library.io — Lightweight Development Stack
+# Runs PostgreSQL & Elasticsearch in containers for local development
+# =================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: library-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: library_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: library-elasticsearch-dev
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - es_dev_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+
+volumes:
+  postgres_dev_data:
+  es_dev_data:
