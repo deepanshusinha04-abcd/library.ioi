@@ -1,42 +1,42 @@
 # ==========================================
-# Library.io — Production React Frontend
-# Multi-Stage Build: Node -> Nginx
+# Library.io — Production Django Dockerfile
 # ==========================================
 
-# Stage 1: Build React Assets
-FROM node:20-alpine AS builder
+FROM python:3.12-slim AS base
+
+# Set environment variables for Python
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# Copy package descriptors
-COPY package*.json ./
+# Install system runtime & build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    netcat-traditional \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install npm dependencies
-RUN npm ci
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
+# Copy backend source code
 COPY . .
 
-# Build production bundle
-ARG VITE_API_BASE_URL=/api
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# Make entrypoint script executable
+RUN chmod +x /app/entrypoint.sh 2>/dev/null || true
 
-RUN npm run build
-
-# Stage 2: Serve via Nginx
-FROM nginx:alpine AS runner
-
-# Copy built static files to Nginx docroot
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Copy custom Nginx configuration for SPA routing
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port
-EXPOSE 80
+# Expose Django port
+EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -q --spider http://localhost:80/ || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health/ || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+# Default command: run production WSGI server via entrypoint
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
+CMD ["gunicorn", "library_core.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "120"]
